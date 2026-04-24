@@ -2,7 +2,7 @@
 Simple demo showing the knowledge system in action.
 """
 
-from src.integration import init_knowledge_system
+from src.mneme import init_knowledge_system
 
 
 def main():
