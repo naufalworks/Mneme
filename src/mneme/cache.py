@@ -4,6 +4,7 @@ from functools import lru_cache
 from typing import Dict, Any
 import hashlib
 import json
+import threading
 
 
 class QueryCache:
@@ -13,6 +14,7 @@ class QueryCache:
         self.maxsize = maxsize
         self._cache = {}
         self._access_order = []
+        self._lock = threading.Lock()
 
     def _make_key(self, *args, **kwargs) -> str:
         """Create cache key from arguments."""
@@ -22,36 +24,41 @@ class QueryCache:
 
     def get(self, key: str) -> Any:
         """Get cached value."""
-        if key in self._cache:
-            # Update access order (LRU)
-            self._access_order.remove(key)
-            self._access_order.append(key)
-            return self._cache[key]
-        return None
+        with self._lock:
+            if key in self._cache:
+                # Update access order (LRU)
+                self._access_order.remove(key)
+                self._access_order.append(key)
+                return self._cache[key]
+            return None
 
     def set(self, key: str, value: Any) -> None:
         """Set cached value."""
-        if key in self._cache:
-            self._access_order.remove(key)
-        elif len(self._cache) >= self.maxsize:
-            # Evict least recently used
-            lru_key = self._access_order.pop(0)
-            del self._cache[lru_key]
+        with self._lock:
+            if key in self._cache:
+                self._access_order.remove(key)
+            elif len(self._cache) >= self.maxsize:
+                # Evict least recently used
+                lru_key = self._access_order.pop(0)
+                del self._cache[lru_key]
 
-        self._cache[key] = value
-        self._access_order.append(key)
+            self._cache[key] = value
+            self._access_order.append(key)
 
     def clear(self) -> None:
         """Clear all cached values."""
-        self._cache.clear()
-        self._access_order.clear()
+        with self._lock:
+            self._cache.clear()
+            self._access_order.clear()
 
     def invalidate(self, pattern: str = None) -> None:
         """Invalidate cache entries matching pattern."""
-        if pattern is None:
-            self.clear()
-        else:
-            keys_to_remove = [k for k in self._cache.keys() if pattern in k]
-            for key in keys_to_remove:
-                del self._cache[key]
-                self._access_order.remove(key)
+        with self._lock:
+            if pattern is None:
+                self._cache.clear()
+                self._access_order.clear()
+            else:
+                keys_to_remove = [k for k in self._cache.keys() if pattern in k]
+                for key in keys_to_remove:
+                    del self._cache[key]
+                    self._access_order.remove(key)

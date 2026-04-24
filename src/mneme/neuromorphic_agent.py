@@ -9,6 +9,7 @@ spike propagation.
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Set
 from datetime import datetime
+from collections import deque
 from .hypervector import HypervectorSpace
 
 
@@ -35,9 +36,9 @@ class NeuromorphicAgent:
         # Connections to other agents (agent -> weight)
         self.connections: Dict['NeuromorphicAgent', float] = {}
 
-        # Statistics
+        # Statistics - use bounded deque to prevent memory leak
         self.spike_count = 0
-        self.query_history: List[Dict] = []
+        self.query_history: deque = deque(maxlen=1000)  # Keep last 1000 queries
 
         # Create domain vector (bundle of domain concepts)
         domain_vecs = [self.kb.get_or_create_concept(c) for c in self.domain_concepts]
@@ -196,24 +197,57 @@ class AgentNetwork:
         """
         Automatically connect agents with similar domains.
 
-        Uses hypervector similarity between domain vectors.
+        Uses LSH index for O(n log n) similarity search instead of O(n²).
         """
         agent_list = list(self.agents.values())
 
-        for i, agent1 in enumerate(agent_list):
-            for agent2 in agent_list[i+1:]:
-                # Calculate domain similarity
-                similarity = self.kb.cosine_similarity(
-                    agent1.domain_vector,
-                    agent2.domain_vector
-                )
+        # For small networks (< 10 agents), use simple pairwise comparison
+        if len(agent_list) < 10:
+            for i, agent1 in enumerate(agent_list):
+                for agent2 in agent_list[i+1:]:
+                    try:
+                        # Calculate domain similarity
+                        similarity = self.kb.cosine_similarity(
+                            agent1.domain_vector,
+                            agent2.domain_vector
+                        )
 
-                # Normalize to [0, 1]
-                similarity = (similarity + 1) / 2
+                        # Normalize to [0, 1]
+                        similarity = (similarity + 1) / 2
 
-                if similarity > threshold:
-                    agent1.connect(agent2, similarity)
-                    agent2.connect(agent1, similarity)
+                        if similarity > threshold:
+                            agent1.connect(agent2, similarity)
+                            agent2.connect(agent1, similarity)
+                    except ValueError:
+                        # Skip if zero vectors
+                        continue
+        else:
+            # For larger networks, use LSH index for efficient similarity search
+            from .lsh_index import LSHIndex
+
+            # Build LSH index of agent domain vectors
+            lsh = LSHIndex(dims=self.kb.dims, n_bits=256)
+            for idx, agent in enumerate(agent_list):
+                lsh.add(agent.domain_vector, {"agent_idx": idx, "name": agent.name})
+
+            # Query for similar agents (O(n log n) instead of O(n²))
+            for idx, agent in enumerate(agent_list):
+                try:
+                    similar_results = lsh.query(agent.domain_vector, top_k=10)
+
+                    for meta, similarity in similar_results:
+                        other_idx = meta["agent_idx"]
+                        if other_idx != idx:  # Don't connect to self
+                            # Normalize to [0, 1]
+                            similarity = (similarity + 1) / 2
+
+                            if similarity > threshold:
+                                other_agent = agent_list[other_idx]
+                                agent.connect(other_agent, similarity)
+                                other_agent.connect(agent, similarity)
+                except ValueError:
+                    # Skip if zero vectors
+                    continue
 
     def broadcast_query(self, query_vector: np.ndarray) -> List[Tuple[Dict, float, str]]:
         """

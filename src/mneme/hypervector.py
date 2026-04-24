@@ -57,6 +57,9 @@ class HypervectorSpace:
         Bind two vectors together (element-wise multiplication).
         Used to create associations: bind(subject, relation) = query for objects.
         """
+        # Validate dimensions match
+        if vec1.shape[0] != self.dims or vec2.shape[0] != self.dims:
+            raise ValueError(f"Vector dimensions must match space dimensions ({self.dims})")
         return vec1 * vec2
 
     def bundle(self, vectors: List[np.ndarray]) -> np.ndarray:
@@ -66,6 +69,11 @@ class HypervectorSpace:
         """
         if not vectors:
             return np.zeros(self.dims)
+
+        # Validate all vectors have correct dimensions
+        for i, vec in enumerate(vectors):
+            if vec.shape[0] != self.dims:
+                raise ValueError(f"Vector {i} has wrong dimensions: {vec.shape[0]} != {self.dims}")
 
         summed = np.sum(vectors, axis=0)
         # Threshold to maintain bipolarity
@@ -78,9 +86,14 @@ class HypervectorSpace:
         norm2 = np.linalg.norm(vec2)
 
         if norm1 == 0 or norm2 == 0:
-            return 0.0
+            # Zero vectors indicate uninitialized or invalid data
+            # Return None to force explicit handling rather than masking the issue
+            raise ValueError("Cannot compute similarity with zero vector")
 
-        return dot_product / (norm1 * norm2)
+        similarity = dot_product / (norm1 * norm2)
+
+        # Clamp to [-1, 1] range to handle floating point errors
+        return max(-1.0, min(1.0, similarity))
 
     def encode_fact(self, subject: str, relation: str, obj: str,
                     metadata: Optional[Dict] = None) -> np.ndarray:

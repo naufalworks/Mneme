@@ -23,11 +23,18 @@ class IncrementalPersistence:
         self.dirty_projects.add(project_name)
 
     def save(self, system, force_full: bool = False) -> None:
-        """Save system state (uses system's native save)."""
+        """Save system state (uses system's native save with atomic write)."""
         try:
-            # Use system's native save method (handles serialization correctly)
-            system.save(str(self.state_file))
+            # Use atomic write pattern: write to temp file, then rename
+            temp_file = self.state_file.with_suffix('.json.tmp')
 
+            # Write to temp file
+            system.save(str(temp_file))
+
+            # Atomic rename (POSIX guarantees atomicity)
+            temp_file.replace(self.state_file)
+
+            # Only clear dirty tracking after successful write
             num_dirty = len(self.dirty_projects)
             self.dirty_projects.clear()
             self.last_save = datetime.now()
@@ -38,6 +45,10 @@ class IncrementalPersistence:
                 self.logger.debug("Saved state (no changes)")
 
         except Exception as e:
+            # Clean up temp file on failure
+            temp_file = self.state_file.with_suffix('.json.tmp')
+            if temp_file.exists():
+                temp_file.unlink()
             raise StateSaveError(f"Failed to save state: {e}")
 
     def load(self, system) -> bool:
