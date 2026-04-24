@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+.hypercode/
+.pytest_cache/
+*.log
+
+# Knowledge storage (keep structure, ignore data)
+.claude/knowledge/system_state.json
+.claude/knowledge/projects/*/
+
+# Benchmarks and tests
+benchmark_*.py
+test_*.py
+profile_*.py
+analyze_*.py

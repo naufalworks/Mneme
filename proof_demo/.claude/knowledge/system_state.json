@@ -1,0 +1,23 @@
+{
+  "created_at": "2026-04-24T13:47:54.310538",
+  "query_count": 0,
+  "projects": {
+    "rate-limiter": {
+      "name": "rate-limiter",
+      "reason": "Prevent API abuse",
+      "created_for": "auth-service",
+      "created_at": "2026-04-24T13:47:54.312447"
+    }
+  },
+  "causal_chains": [
+    {
+      "project": "rate-limiter",
+      "chain": [
+        "auth had no rate limiting",
+        "attacks detected",
+        "rate-limiter created"
+      ],
+      "timestamp": "2026-04-24T13:47:54.312132"
+    }
+  ]
+}
